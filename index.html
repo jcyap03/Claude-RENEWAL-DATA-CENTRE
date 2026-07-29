@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CY xC/xD Data Search Centre</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--blue:#0057b8;--blue2:#0b75d1;--ink:#172033;--muted:#6b7280;--line:#dfe5ee;--bg:#f4f7fb;--card:#fff;--green:#087f5b;--amber:#b26a00;--red:#c92a2a}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;padding:24px 28px;box-shadow:0 2px 12px #0002}
+header h1{margin:0 0 5px;font-size:24px} header p{margin:0;opacity:.9;font-size:13px}
+main{padding:20px;max-width:1700px;margin:auto}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 4px 18px #1720330d;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:12px;align-items:end}.field label{display:block;font-size:12px;font-weight:700;color:#475569;margin:0 0 6px}.field input,.field select{width:100%;height:42px;border:1px solid #cfd8e6;border-radius:9px;padding:0 11px;background:#fff;color:var(--ink)}
+button{height:42px;border:0;border-radius:9px;padding:0 15px;font-weight:700;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#e9f2fd;color:var(--blue)}.ghost{background:#eef1f5;color:#334155}.danger{background:#fff0f0;color:var(--red)}button:disabled{opacity:.45;cursor:not-allowed}
+.upload{border:2px dashed #b9c9dc;border-radius:12px;padding:16px;text-align:center;background:#f8fbff}.upload.drag{border-color:var(--blue);background:#edf6ff}.upload input{display:none}.upload strong{color:var(--blue)}
+.status{font-size:13px;margin-top:10px;color:var(--muted)}.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 11px;background:#fff;font-size:12px}.pill b{margin-left:4px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.tablewrap{overflow:auto;max-height:68vh;border:1px solid var(--line);border-radius:10px}table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12px}th,td{padding:9px 10px;border-right:1px solid #e8edf4;border-bottom:1px solid #e8edf4;white-space:nowrap}th{position:sticky;top:0;background:#edf4fc;color:#1e3a5f;z-index:2;text-align:left}tr:hover td{background:#f7fbff}.num{text-align:right}.tag{display:inline-block;border-radius:999px;padding:3px 8px;font-weight:700;font-size:11px}.p0{background:#ffe3e3;color:#a51111}.p1{background:#fff3bf;color:#8a5200}.p2{background:#d3f9d8;color:#087f5b}.p3{background:#dbeafe;color:#1d4ed8}.p4{background:#ede9fe;color:#6d28d9}.empty{text-align:center;padding:36px;color:var(--muted)}
+.small{font-size:11px;color:var(--muted)}.checkboxes{display:flex;gap:12px;flex-wrap:wrap;padding-top:7px}.checkboxes label{font-size:12px}.checkboxes input{vertical-align:middle}.notice{background:#fff8db;border:1px solid #ffe08a;color:#73510d;border-radius:9px;padding:9px 11px;font-size:12px;margin-top:10px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.actions button{flex:1}main{padding:12px}header{padding:18px}}
+</style>
+</head>
+<body>
+<header><h1>CY xC/xD Data Search Centre</h1><p>Upload an Excel file containing xC and/or xD tabs. Processing stays in your browser.</p></header>
+<main>
+<div class="card">
+  <div id="dropZone" class="upload">
+    <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsb,.csv" />
+    <div><strong>Click to upload</strong> or drag your Excel file here</div>
+    <div class="small">Required sheet names: xC and/or xD</div>
+  </div>
+  <div id="status" class="status">No file loaded.</div>
+  <div id="notice" class="notice" style="display:none"></div>
+  <div class="stats">
+    <span class="pill">xC rows <b id="xcCount">0</b></span><span class="pill">xD rows <b id="xdCount">0</b></span><span class="pill">Combined <b id="totalCount">0</b></span><span class="pill">Results <b id="resultCount">0</b></span>
+  </div>
+</div>
+<div class="card">
+  <div class="grid">
+    <div class="field"><label>Search all selected columns</label><input id="search" placeholder="Company, CUG, account, MSISDN, plan..." /></div>
+    <div class="field"><label>Renewal Type</label><select id="renewal"><option value="">All</option><option>No contract</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></div>
+    <div class="field"><label>Source / Category</label><select id="source"><option value="">All sources</option><option value="xC">xC</option><option value="xD">xD</option></select></div>
+    <button id="clear" class="ghost">Clear Filters</button>
+  </div>
+  <div class="checkboxes"><label><input id="activeOnly" type="checkbox"> Active only (xC)</label><label><input id="renewableOnly" type="checkbox"> No Contract, P1 or P2 only</label></div>
+</div>
+<div class="card">
+  <div class="actions" style="margin-bottom:12px"><button id="exportXlsx" class="primary" disabled>Export Results to Excel</button><button id="exportCsv" class="secondary" disabled>Export CSV</button><button id="copy" class="ghost" disabled>Copy Table</button></div>
+  <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"><tr><td class="empty">Upload a file to begin.</td></tr></tbody></table></div>
+</div>
+</main>
+<script>
+const COLS=[
+ ['Source','source'],['No','no'],['COMP_NM','company'],['CUG_NM','cug'],['Indv Account Code','account'],['SUBS_MSISDN','msisdn'],['SUBS_PRMRY_OFRNG','plan'],['category','category'],['EXP_DATE','expiry'],['Mthly Fee','monthly'],['OCC','occ'],['Final Price','finalPrice'],['Remaining Months','remaining'],['Penalty fee','penalty'],['Renewal Type','renewalType'],['Status','status']
+];
+let allRows=[], filteredRows=[];
+const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function key(s){return String(s??'').trim().toLowerCase().replace(/[\s_\-\/]+/g,'')}
+function indexMap(headers){const m={}; headers.forEach((h,i)=>m[key(h)]=i); return m}
+function get(row,map,...names){for(const n of names){const i=map[key(n)]; if(i!==undefined && row[i]!==undefined && row[i]!==null && row[i]!=='')return row[i]} return ''}
+function num(v){if(v===''||v==null)return 0; const n=Number(String(v).replace(/,/g,'')); return Number.isFinite(n)?n:0}
+function excelDate(v){
+ if(v instanceof Date && !isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+ if(typeof v==='number' && Number.isFinite(v)){const d=XLSX.SSF.parse_date_code(v); if(d)return new Date(d.y,d.m-1,d.d)}
+ if(typeof v==='string' && v.trim()){
+   const s=v.trim(); let m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+   const d=new Date(s); if(!isNaN(d))return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+ }
+ return null;
+}
+function formatDate(d){return d?`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`:''}
+function remainingMonths(exp,today=new Date()){
+ if(!exp)return '';
+ const t=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+ if(exp<t)return 0;
+ let m=(exp.getFullYear()-t.getFullYear())*12+(exp.getMonth()-t.getMonth());
+ if(exp.getDate()>=t.getDate())m+=1;
+ return Math.max(1,m);
+}
+function renewalType(exp,today=new Date()){
+ if(!exp)return '';
+ const t=new Date(today.getFullYear(),today.getMonth(),today.getDate()); if(exp<t)return 'No contract';
+ const limit=n=>new Date(t.getFullYear(),t.getMonth()+n,t.getDate());
+ if(exp<=limit(3))return 'P1'; if(exp<=limit(6))return 'P2'; if(exp<=limit(9))return 'P3'; return 'P4';
+}
+function categoryXC(plan){const p=String(plan).toLowerCase(); if(p.includes('fibre')||p.includes('fiber'))return 'FTTO'; if(p.includes('wireless')||p.includes('home wifi'))return 'FWA'; if(p.includes('m2m')||p.includes('iot'))return 'M2M'; return 'voice'}
+function calcRow(base){const exp=excelDate(base.expiryRaw), rem=remainingMonths(exp), rt=renewalType(exp); const monthly=num(base.monthly), occ=num(base.occ), finalPrice=base.finalPrice===''?monthly+occ:num(base.finalPrice); return {...base,expiryDate:exp,expiry:formatDate(exp),monthly,occ,finalPrice,remaining:rem,penalty:(rt==='No contract'||rem===''?0:monthly*rem+100),renewalType:rt}}
+function parseXD(ws){const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}); if(rows.length<2)return[]; const map=indexMap(rows[0]); return rows.slice(1).filter(r=>r.some(v=>v!=='')).map((r,i)=>calcRow({source:'xD',no:i+1,company:get(r,map,'CMPNY_NM'),cug:get(r,map,'CUG_NM'),account:String(get(r,map,'ACCT_NUM')),msisdn:normalizeMsisdn(get(r,map,'SUBS_MSISDN')),plan:get(r,map,'SUBS_PRMRY_OFRNG'),category:get(r,map,'category'),expiryRaw:get(r,map,'EST_EXPIRY_DATE','UPD_EXPIRY_DATE','UPD_EXPIRY_DATE5'),monthly:get(r,map,'commitment'),occ:get(r,map,'occ'),finalPrice:get(r,map,'net_cv'),status:get(r,map,'SUBS_STAT')}));}
+function parseXC(ws){const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}); if(rows.length<2)return[]; const map=indexMap(rows[0]); return rows.slice(1).filter(r=>r.some(v=>v!=='')).map((r,i)=>{const plan=get(r,map,'PRODUCT_NAME'),commit=num(get(r,map,'COMMITMENT_FEE')),rebate=num(get(r,map,'REBATE_AMOUNT')); return calcRow({source:'xC',no:i+1,company:get(r,map,'COMPANY_NAME','CUSTOMER_NAME','ACCOUNT_NAME'),cug:get(r,map,'ACCOUNT_NAME'),account:String(get(r,map,'BILLING_ACCOUNT_NUMBER')),msisdn:normalizeMsisdn(get(r,map,'MSISDN')),plan,category:categoryXC(plan),expiryRaw:get(r,map,'CONTRACT_END_DATE'),monthly:commit,occ:-rebate,finalPrice:commit-rebate,status:get(r,map,'STATUS')})});}
+function normalizeMsisdn(v){let s=String(v??'').trim(); if(/^\d+(\.0)?$/.test(s))s=s.replace(/\.0$/,''); if(s.startsWith('60')&&/^60\d+$/.test(s))s='0'+s.slice(2); return s}
+function render(){
+ const q=$('search').value.trim().toLowerCase(), rt=$('renewal').value, src=$('source').value, active=$('activeOnly').checked, renewable=$('renewableOnly').checked;
+ filteredRows=allRows.filter(r=>{
+   const hay=[r.company,r.cug,r.account,r.msisdn,r.plan,r.category,r.expiry,r.renewalType,r.status,r.source].join(' ').toLowerCase();
+   return (!q||hay.includes(q))&&(!rt||r.renewalType===rt)&&(!src||r.source===src)&&(!active||r.source!=='xC'||String(r.status).toUpperCase()==='ACTIVE')&&(!renewable||['No contract','P1','P2'].includes(r.renewalType));
+ });
+ $('resultCount').textContent=filteredRows.length.toLocaleString();
+ $('thead').innerHTML='<tr>'+COLS.map(c=>`<th>${esc(c[0])}</th>`).join('')+'</tr>';
+ const show=filteredRows.slice(0,5000);
+ $('tbody').innerHTML=show.length?show.map(r=>'<tr>'+COLS.map(([label,k])=>{
+   let v=r[k]; if(['monthly','occ','finalPrice','penalty'].includes(k))v=Number(v||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+   if(k==='renewalType')v=`<span class="tag ${r.renewalType==='No contract'?'p0':String(r.renewalType).toLowerCase()}">${esc(r.renewalType)}</span>`; else v=esc(v);
+   return `<td class="${['monthly','occ','finalPrice','remaining','penalty'].includes(k)?'num':''}">${v}</td>`;
+ }).join('')+'</tr>').join(''):`<tr><td colspan="${COLS.length}" class="empty">No matching data.</td></tr>`;
+ if(filteredRows.length>5000)$('notice').style.display='block',$('notice').textContent='Showing the first 5,000 matching rows on screen. Export includes all results.';
+ else $('notice').style.display='none';
+ const enabled=filteredRows.length>0; ['exportXlsx','exportCsv','copy'].forEach(id=>$(id).disabled=!enabled);
+}
+async function loadFile(file){
+ $('status').textContent=`Reading ${file.name}...`; try{
+   if(typeof XLSX==='undefined')throw new Error('Excel reader library could not load. Please connect to the internet and reopen this page.');
+   const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true}); const xc=wb.Sheets['xC']?parseXC(wb.Sheets['xC']):[], xd=wb.Sheets['xD']?parseXD(wb.Sheets['xD']):[];
+   if(!xc.length&&!xd.length)throw new Error('No usable xC or xD sheet was found. Check the sheet names and headers.');
+   allRows=[...xd,...xc]; $('xcCount').textContent=xc.length.toLocaleString(); $('xdCount').textContent=xd.length.toLocaleString(); $('totalCount').textContent=allRows.length.toLocaleString();
+   $('status').textContent=`Loaded ${file.name}. Calculations use today's date: ${formatDate(new Date())}.`; render();
+ }catch(e){allRows=[];render();$('status').textContent='Error: '+e.message;}
+}
+function exportRows(type){const data=filteredRows.map(r=>Object.fromEntries(COLS.map(([label,k])=>[label,k==='expiry'?r.expiry:(['monthly','occ','finalPrice','penalty','remaining'].includes(k)?r[k]:r[k])]))); const ws=XLSX.utils.json_to_sheet(data); ws['!cols']=COLS.map(([l])=>({wch:Math.min(35,Math.max(12,l.length+2))})); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Search Results'); if(type==='xlsx')XLSX.writeFile(wb,'CY_xC_xD_Search_Results.xlsx'); else XLSX.writeFile(wb,'CY_xC_xD_Search_Results.csv',{bookType:'csv'});}
+$('dropZone').onclick=()=>$('fileInput').click(); $('fileInput').onchange=e=>e.target.files[0]&&loadFile(e.target.files[0]);
+['dragenter','dragover'].forEach(ev=>$('dropZone').addEventListener(ev,e=>{e.preventDefault();$('dropZone').classList.add('drag')})); ['dragleave','drop'].forEach(ev=>$('dropZone').addEventListener(ev,e=>{e.preventDefault();$('dropZone').classList.remove('drag')})); $('dropZone').addEventListener('drop',e=>e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0]));
+['search','renewal','source','activeOnly','renewableOnly'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',render));
+$('clear').onclick=()=>{$('search').value='';$('renewal').value='';$('source').value='';$('activeOnly').checked=false;$('renewableOnly').checked=false;render()};
+$('exportXlsx').onclick=()=>exportRows('xlsx'); $('exportCsv').onclick=()=>exportRows('csv'); $('copy').onclick=async()=>{const lines=[COLS.map(c=>c[0]).join('\t'),...filteredRows.map(r=>COLS.map(c=>r[c[1]]??'').join('\t'))]; await navigator.clipboard.writeText(lines.join('\n')); $('copy').textContent='Copied';setTimeout(()=>$('copy').textContent='Copy Table',1200)};
+render();
+</script>
+</body>
+</html>
