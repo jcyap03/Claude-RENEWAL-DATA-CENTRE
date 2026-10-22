@@ -114,6 +114,22 @@
   .f-search{flex:1 1 320px;}
   .f-field select{min-width:180px; cursor:pointer;}
   .clear-btn{align-self:flex-end;}
+  .multiselect{position:relative;}
+  .ms-btn{
+    min-width:180px; width:100%; text-align:left; padding:9px 32px 9px 12px; border:1px solid var(--line);
+    border-radius:8px; font-size:13.5px; font-family:var(--sans); background:var(--bg) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%234A5A78"/></svg>') no-repeat right 12px center;
+    color:var(--ink); cursor:pointer;
+  }
+  .ms-btn:focus{outline:none; border-color:var(--accent); background-color:#fff;}
+  .ms-panel{
+    display:none; position:absolute; top:calc(100% + 4px); left:0; min-width:180px; z-index:20;
+    background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 24px rgba(18,33,59,.12);
+    padding:6px; max-height:220px; overflow:auto;
+  }
+  .ms-panel.open{display:block;}
+  .ms-opt{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; font-size:13.5px; cursor:pointer; user-select:none;}
+  .ms-opt:hover{background:var(--accent-soft);}
+  .ms-opt input{cursor:pointer;}
   .filter-checks{
     display:flex; align-items:center; gap:20px; flex-wrap:wrap; margin-top:14px;
     padding-top:14px; border-top:1px solid #EEF1F6;
@@ -245,15 +261,17 @@
           <input type="text" id="searchInput" placeholder="Search company, CUG, MSISDN, product, account code...">
         </div>
         <div class="f-field">
-          <label for="renewalSelect">Renewal Type</label>
-          <select id="renewalSelect">
-            <option value="all">All</option>
-            <option value="No contract">No Contract</option>
-            <option value="P1">P1</option>
-            <option value="P2">P2</option>
-            <option value="P3">P3</option>
-            <option value="P4">P4</option>
-          </select>
+          <label for="renewalDropdownBtn">Renewal Type</label>
+          <div class="multiselect" id="renewalMultiselect">
+            <button type="button" class="ms-btn" id="renewalDropdownBtn">All</button>
+            <div class="ms-panel" id="renewalPanel">
+              <label class="ms-opt"><input type="checkbox" value="No contract"> No Contract</label>
+              <label class="ms-opt"><input type="checkbox" value="P1"> P1</label>
+              <label class="ms-opt"><input type="checkbox" value="P2"> P2</label>
+              <label class="ms-opt"><input type="checkbox" value="P3"> P3</label>
+              <label class="ms-opt"><input type="checkbox" value="P4"> P4</label>
+            </div>
+          </div>
         </div>
         <div class="f-field">
           <label for="categorySelect">Source / Category</label>
@@ -322,7 +340,7 @@
 
   let allRows = [];
   let xcStatusMap = new Map();
-  let activeFilter = 'all';
+  let selectedRenewal = new Set(); // empty = All
   let sortKey = 'urgency';
   let sortDir = 1;
 
@@ -335,7 +353,10 @@
   const fileLabel = document.getElementById('fileLabel');
   const uploadError = document.getElementById('uploadError');
   const searchInput = document.getElementById('searchInput');
-  const renewalSelect = document.getElementById('renewalSelect');
+  const renewalBtn = document.getElementById('renewalDropdownBtn');
+  const renewalPanel = document.getElementById('renewalPanel');
+  const renewalMultiselect = document.getElementById('renewalMultiselect');
+  const renewalCheckboxes = Array.from(renewalPanel.querySelectorAll('input[type=checkbox]'));
   const categorySelect = document.getElementById('categorySelect');
   const activeOnlyChk = document.getElementById('activeOnlyChk');
   const activeOnlyWrap = document.getElementById('activeOnlyWrap');
@@ -690,21 +711,40 @@
       {key:'P4', cls:'c-p4', label:'P4 · 9+ mths', num:counts.p4},
     ];
     const wrapEl = document.getElementById('summaryCards');
-    wrapEl.innerHTML = defs.map(d => `
-      <div class="card ${d.cls} ${activeFilter===d.key ? 'active':''}" data-filter="${escapeHtml(d.key)}">
+    wrapEl.innerHTML = defs.map(d => {
+      const isActive = d.key === 'all' ? selectedRenewal.size === 0 : (selectedRenewal.size === 1 && selectedRenewal.has(d.key));
+      return `
+      <div class="card ${d.cls} ${isActive ? 'active':''}" data-filter="${escapeHtml(d.key)}">
         <div class="num">${d.num.toLocaleString()}</div>
         <div class="lbl">${d.label}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     wrapEl.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => {
-      activeFilter = c.getAttribute('data-filter');
-      renewalSelect.value = activeFilter;
+      const key = c.getAttribute('data-filter');
+      setRenewalSelection(key === 'all' ? [] : [key]);
       buildSummary();
       render();
     }));
   }
 
+  function setRenewalSelection(types){
+    selectedRenewal = new Set(types);
+    renewalCheckboxes.forEach(cb => { cb.checked = selectedRenewal.has(cb.value); });
+    updateRenewalButtonLabel();
+  }
+
+  function updateRenewalButtonLabel(){
+    if(selectedRenewal.size === 0) renewalBtn.textContent = 'All';
+    else if(selectedRenewal.size === 1){
+      const only = [...selectedRenewal][0];
+      renewalBtn.textContent = only === 'No contract' ? 'No Contract' : only;
+    } else {
+      renewalBtn.textContent = selectedRenewal.size + ' selected';
+    }
+  }
+
   function matchesFilter(r){
-    if(activeFilter !== 'all' && r.renewal !== activeFilter) return false;
+    if(selectedRenewal.size > 0 && !selectedRenewal.has(r.renewal)) return false;
     if(categorySelect.value !== 'all' && String(r.category ?? '').trim().toLowerCase() !== categorySelect.value) return false;
     if(activeOnlyChk.checked && !activeOnlyChk.disabled){
       if(r.status !== 'ACTIVE') return false;
@@ -826,17 +866,23 @@
   overlay.addEventListener('click', e => { if(e.target === overlay) overlay.style.display = 'none'; });
 
   searchInput.addEventListener('input', render);
-  renewalSelect.addEventListener('change', () => { activeFilter = renewalSelect.value; buildSummary(); render(); });
+  renewalBtn.addEventListener('click', (e) => { e.stopPropagation(); renewalPanel.classList.toggle('open'); });
+  document.addEventListener('click', (e) => { if(!renewalMultiselect.contains(e.target)) renewalPanel.classList.remove('open'); });
+  renewalCheckboxes.forEach(cb => cb.addEventListener('change', () => {
+    if(cb.checked) selectedRenewal.add(cb.value); else selectedRenewal.delete(cb.value);
+    updateRenewalButtonLabel();
+    buildSummary();
+    render();
+  }));
   categorySelect.addEventListener('change', render);
   activeOnlyChk.addEventListener('change', render);
   urgentOnlyChk.addEventListener('change', render);
   clearFiltersBtn.addEventListener('click', () => {
     searchInput.value = '';
-    renewalSelect.value = 'all';
+    setRenewalSelection([]);
     categorySelect.value = 'all';
     urgentOnlyChk.checked = false;
     activeOnlyChk.checked = false;
-    activeFilter = 'all';
     buildSummary();
     render();
   });
