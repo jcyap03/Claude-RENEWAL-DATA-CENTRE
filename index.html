@@ -279,6 +279,13 @@
             <option value="all">All sources</option>
           </select>
         </div>
+        <div class="f-field">
+          <label for="columnsDropdownBtn">Columns</label>
+          <div class="multiselect" id="columnsMultiselect">
+            <button type="button" class="ms-btn" id="columnsDropdownBtn">Columns</button>
+            <div class="ms-panel" id="columnsPanel"></div>
+          </div>
+        </div>
         <button class="btn-line clear-btn" id="clearFiltersBtn">Clear Filters</button>
       </div>
       <div class="filter-checks">
@@ -296,23 +303,7 @@
       <div class="table-scroll">
         <table id="dataTable">
           <thead>
-            <tr>
-              <th data-key="source">Source</th>
-              <th data-key="no">No</th>
-              <th data-key="comp">Company</th>
-              <th data-key="cug">CUG Name</th>
-              <th data-key="acct">Account Code</th>
-              <th data-key="msisdn">MSISDN</th>
-              <th data-key="product">Product / Plan</th>
-              <th data-key="category">Category</th>
-              <th data-key="expiry">Expiry Date</th>
-              <th data-key="fee">Mthly Fee</th>
-              <th data-key="occ">OCC</th>
-              <th data-key="final">Final Price</th>
-              <th data-key="remaining">Remaining Mths</th>
-              <th data-key="penalty">Penalty Fee</th>
-              <th data-key="renewal">Renewal Type</th>
-            </tr>
+            <tr id="tableHeadRow"></tr>
           </thead>
           <tbody id="tableBody"></tbody>
         </table>
